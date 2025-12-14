@@ -146,15 +146,15 @@ void exit() {
     for (int x = (int)c.pos.x; x < c.pos.x + chunkWidth; x += blockSize) {
       for (int z = (int)c.pos.z; z < c.pos.z + chunkWidth; z += blockSize) {
         if(!c.blockMap.containsKey(vectorHash(new PVector(x, 16, z)))){
-          println("-1 " + x + " 16 " + z);
+          //println("-1 " + x + " 16 " + z);
           output.println("-1 " + x + " 16 " + z);
         }
         if(!c.blockMap.containsKey(vectorHash(new PVector(x, 32, z)))){
-          println("-1 " + x + " 32 " + z);
+          //println("-1 " + x + " 32 " + z);
           output.println("-1 " + x + " 32 " + z);
         }
         if(!c.blockMap.containsKey(vectorHash(new PVector(x, 48, z)))){
-          println("-1 " + x + " 48 " + z);
+          //println("-1 " + x + " 48 " + z);
           output.println("-1 " + x + " 48 " + z);
         }
       }
@@ -163,11 +163,11 @@ void exit() {
       if(b.blockType <= 1 && b.pos.y <= 48) continue;
       if(b.pos.y == 0) continue;
       if(b.pos.y <= 48){
-        println("-1 " + b.pos.x + " " + b.pos.y + " " + b.pos.z);
+        //println("-1 " + b.pos.x + " " + b.pos.y + " " + b.pos.z);
         output.println("-1 " + b.pos.x + " " + b.pos.y + " " + b.pos.z);
       }
-      println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + b.delay);
-      output.println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + b.delay);
+      //println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + max(-1, b.delay));
+      output.println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + max(-1, b.delay));
     }
   }
   println("saved");
@@ -207,7 +207,7 @@ void setup() {
     if(chunkMap.containsKey(ky)) continue;
     ArrayList<int[]> list = chunkSave.get(ky);
     PVector pos = new PVector(floor(list.get(0)[1] / (float)chunkWidth) * chunkWidth, 0, floor(list.get(0)[3] / (float)chunkWidth) * chunkWidth);
-    println(pos + " " + list.get(0)[1] + " " + list.get(0)[3]);
+    //println(pos + " " + list.get(0)[1] + " " + list.get(0)[3]);
     Chunk newChunk = new Chunk(pos, list);
     chunks.add(newChunk);
     chunkMap.put(vectorHash(newChunk.pos), newChunk);
@@ -301,7 +301,7 @@ void setup() {
   //}
 }
 void draw() {
-  println(frameRate);
+  //println(frameRate);
   if (fly)
     defaultSpeed = 0.6;
   else
@@ -1844,7 +1844,7 @@ class Chunk {
     blockMap.put(vectorHash(b.pos), b);
   }
   void addBlock(PVector v, int blockType, int attached, int dir){
-    println(v + " " + pos);
+    //println(v + " " + pos);
     addBlock(v, blockType, attached, dir, true);
   }
   void addBlock(PVector v, int blockType, int attached, int dir, boolean update) {
