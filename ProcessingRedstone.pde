@@ -130,18 +130,53 @@ Robot robot;
 boolean mouseLock = false;
 int handTime = 0;
 
+PImage[] recolored = new PImage[16];
 int beginTime = 0;
 PrintWriter output;
-String[] operations;
+HashMap<Long, ArrayList<int[]>> chunkSave = new HashMap();
 void settings() {
   fullScreen(P3D);
   //size(1710, 1000, P3D);
   noSmooth();
 }
 void exit() {
+  println("saving...");
+  println("do not exit");
+  for(Chunk c:chunks){
+    for (int x = (int)c.pos.x; x < c.pos.x + chunkWidth; x += blockSize) {
+      for (int z = (int)c.pos.z; z < c.pos.z + chunkWidth; z += blockSize) {
+        if(!c.blockMap.containsKey(vectorHash(new PVector(x, 16, z)))){
+          println("-1 " + x + " 16 " + z);
+          output.println("-1 " + x + " 16 " + z);
+        }
+        if(!c.blockMap.containsKey(vectorHash(new PVector(x, 32, z)))){
+          println("-1 " + x + " 32 " + z);
+          output.println("-1 " + x + " 32 " + z);
+        }
+        if(!c.blockMap.containsKey(vectorHash(new PVector(x, 48, z)))){
+          println("-1 " + x + " 48 " + z);
+          output.println("-1 " + x + " 48 " + z);
+        }
+      }
+    }
+    for(Block b:c.blocks){
+      if(b.blockType <= 1 && b.pos.y <= 48) continue;
+      if(b.pos.y == 0) continue;
+      if(b.pos.y <= 48){
+        println("-1 " + b.pos.x + " " + b.pos.y + " " + b.pos.z);
+        output.println("-1 " + b.pos.x + " " + b.pos.y + " " + b.pos.z);
+      }
+      println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + b.delay);
+      output.println(b.blockType + " " + b.pos.x + " " + b.pos.y + " " + b.pos.z + " " + b.power + " " + b.strength + " " + b.dir + " " + b.attached + " " + b.state + " " + (b.flag?1:0) + " " + b.nextStrength + " " + b.delay);
+    }
+  }
+  println("saved");
   output.flush();
   output.close();
   super.exit();
+}
+boolean fileExists(String path) {
+  return new java.io.File(path).exists();
 }
 void setup() {
   try {
@@ -150,10 +185,35 @@ void setup() {
   catch(Exception e) {
     println("ERROR CREATING ROBOT");
   }
-  operations = loadStrings("save_file.txt");
-  output = createWriter("save_file.txt");
+  String[] operations = loadStrings("save_file.txt");
+  output = createWriter("data/save_file.txt");
   for(int i = 0; i < operations.length; i++){
-    output.println(operations[i]);
+    String[] parts = splitTokens(operations[i]);
+    int[] values = new int[parts.length];
+    for (int j = 0; j < parts.length; j++) {
+      values[j] = (int)(float(parts[j]));
+    }
+    float cx = floor(values[1] / (float)chunkWidth) * chunkWidth;
+    float cz = floor(values[3] / (float)chunkWidth) * chunkWidth;
+    
+    PVector pos = new PVector(cx, 0, cz);
+    long hash = vectorHash(pos);
+    if(!chunkSave.containsKey(hash)){
+      chunkSave.put(hash, new ArrayList<int[]>());
+    }
+    chunkSave.get(hash).add(values);
+  }
+  for (Long ky : chunkSave.keySet()) {
+    if(chunkMap.containsKey(ky)) continue;
+    ArrayList<int[]> list = chunkSave.get(ky);
+    PVector pos = new PVector(floor(list.get(0)[1] / (float)chunkWidth) * chunkWidth, 0, floor(list.get(0)[3] / (float)chunkWidth) * chunkWidth);
+    println(pos + " " + list.get(0)[1] + " " + list.get(0)[3]);
+    Chunk newChunk = new Chunk(pos, list);
+    chunks.add(newChunk);
+    chunkMap.put(vectorHash(newChunk.pos), newChunk);
+    for(Block b:newChunk.blocks){
+      b.update(false);
+    }
   }
   output.flush();
   noStroke();
@@ -186,6 +246,44 @@ void setup() {
   ((PGraphicsOpenGL)getGraphics()).textureSampling(2);
   hint(DISABLE_TEXTURE_MIPMAPS);
   atlas = loadImage("atlas.png");
+  atlas.loadPixels();
+
+  for (int strength = 0; strength <= 15; strength++) {
+
+    // compute strength color
+    color strengthColor;
+    if (strength > 0) {
+      strengthColor = color(
+        100 + strength * 10,
+        max(0, 22 * strength - 280),
+        0
+      );
+    } else {
+      strengthColor = color(75, 0, 0);
+    }
+
+    // create output image
+    recolored[strength] = createImage(atlas.width, atlas.height, ARGB);
+    recolored[strength].loadPixels();
+
+    float sr = red(strengthColor) / 255.0;
+    float sg = green(strengthColor) / 255.0;
+    float sb = blue(strengthColor) / 255.0;
+
+    // recolor pixels
+    for (int i = 0; i < atlas.pixels.length; i++) {
+      color c = atlas.pixels[i];
+
+      float r = red(c)   * sr;
+      float g = green(c) * sg;
+      float b = blue(c)  * sb;
+      float a = alpha(c);
+
+      recolored[strength].pixels[i] = color(r, g, b, a);
+    }
+
+    recolored[strength].updatePixels();
+  }
   frameRate(40);
   fill(255, 255);
   stroke(0);
@@ -194,14 +292,16 @@ void setup() {
 
   playerPos.y = 4*cubeSize+camera_height;
 
-  Chunk chunk = new Chunk(new PVector(0, 0, 0), seed);
-  chunks.add(chunk);
-  chunkMap.put(vectorHash(chunk.pos), chunk);
-  for (Chunk c : chunks) {
-    c.update();
-  }
+  
+  //Chunk chunk = new Chunk(new PVector(0, 0, 0), new ArrayList<int[]>());
+  //chunks.add(chunk);
+  //chunkMap.put(vectorHash(chunk.pos), chunk);
+  //for (Chunk c : chunks) {
+  //  c.update();
+  //}
 }
 void draw() {
+  println(frameRate);
   if (fly)
     defaultSpeed = 0.6;
   else
@@ -652,7 +752,7 @@ void createNewChunks() {
   for (int x = (int)((cameraPos.x-renderDist)/chunkWidth - 1)*chunkWidth; x <= (int)((cameraPos.x+2*renderDist)/chunkWidth + 1)*chunkWidth; x+= chunkWidth) {
     for (int z = (int)((cameraPos.z-renderDist)/chunkWidth - 1)*chunkWidth; z <= (int)((cameraPos.z+2*renderDist)/chunkWidth + 1)*chunkWidth; z+= chunkWidth) {
       if (!chunkMap.containsKey(vectorHash(new PVector(x, 0, z)))) {
-        Chunk newChunk = new Chunk(new PVector(x, 0, z), seed);
+        Chunk newChunk = new Chunk(new PVector(x, 0, z), new ArrayList<int[]>());
         chunks.add(newChunk);
         chunkMap.put(vectorHash(newChunk.pos), newChunk);
         newChunk.update();
@@ -1003,52 +1103,15 @@ class Block {
       return true;
     }
     return false;
-  }
-  PImage recolor(PImage src, color tintColor) {
-  // Create a new image the same size as src
-  PImage result = createImage(src.width, src.height, ARGB);
+  }    
   
-  src.loadPixels();
-  result.loadPixels();
-  
-  float tr = red(tintColor) / 255.0;
-  float tg = green(tintColor) / 255.0;
-  float tb = blue(tintColor) / 255.0;
-  float ta = alpha(tintColor) / 255.0; // optional alpha tint
-  
-  for (int i = 0; i < src.pixels.length; i++) {
-    color c = src.pixels[i];
-    
-    // Get original channels
-    float r = red(c);
-    float g = green(c);
-    float b = blue(c);
-    float a = alpha(c);
-    
-    // Multiply by tint color
-    float nr = r * tr;
-    float ng = g * tg;
-    float nb = b * tb;
-    float na = a * ta;
-    
-    // Assign to result
-    result.pixels[i] = color(nr, ng, nb, na);
-  }
-  
-  result.updatePixels();
-  return result;
-}
   void drawSide(int side) {
+    fill(200);
     if (blockType == 5) {
       pushMatrix();
       translate(0, -blockSize/2+0.01, 0);
       rotateX(PI/2);
       boolean dot = false;
-      color strengthColor;
-      if(strength > 0)
-        strengthColor = color(100+strength*10, max(0, 22*strength-280), 0);
-      else
-        strengthColor = color(75, 0, 0);
       int n = 0;
         boolean opp = false;
         for(int i = 0; i < 4; i++){
@@ -1065,59 +1128,39 @@ class Block {
           
         }
       if(side == 5 && dot){
-        PImage subImg = atlas.get(85, 21, 6, 7);      // atlas region for dot
-        PImage recolored = recolor(subImg, strengthColor);
-        image(recolored, -3, -3, 6, 7);
+        image(recolored[strength], -3, -3, 6, 7, 85, 21, 91, 28);
       }
       if(sidecovered[side]){
-        PImage subImg;
-        PImage recolored;
         
         if (side == 1) {
           if (dot) {
-            subImg = atlas.get(80, 32, 5, 16);      // atlas region for dot
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, -size/2, size/2 - 3, size);
+            image(recolored[strength], -size/2, -size/2, size/2 - 3, size, 80, 32, 85, 48);
           } else {
-            subImg = atlas.get(80, 32, 8, 16);      // atlas region
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, -size/2, size/2, size);
+            image(recolored[strength], -size/2, -size/2, size/2, size, 80, 32, 88, 48);
           }
         }
         
         if (side == 0) {
           if (dot) {
-            subImg = atlas.get(91, 32, 5, 16);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, 3, -size/2, size/2 - 3, size);
+            image(recolored[strength], 3, -size/2, size/2 - 3, size, 91, 32, 96, 48);
           } else {
-            subImg = atlas.get(88, 32, 8, 16);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, 0, -size/2, size/2, size);
+            image(recolored[strength], 0, -size/2, size/2, size, 88, 32, 96, 48);
           }
         }
         
         if (side == 3) {
           if (dot) {
-            subImg = atlas.get(80, 8, 16, 5);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, -size/2, size, size/2 - 3);
+            image(recolored[strength], -size/2, -size/2, size, size/2 - 3, 80, 8, 96, 13);
           } else {
-            subImg = atlas.get(80, 11, 16, 5);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, -size/2, size, size/2);
+            image(recolored[strength], -size/2, -size/2, size, size/2, 80, 11, 96, 16);
           }
         }
         
         if (side == 2) {
           if (dot) {
-            subImg = atlas.get(80, 4, 16, 4);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, 4, size, size/2 - 4);
+            image(recolored[strength], -size/2, 4, size, size/2 - 4, 80, 4, 96, 8);
           } else {
-            subImg = atlas.get(80, 0, 16, 8);
-            recolored = recolor(subImg, strengthColor);
-            image(recolored, -size/2, 0, size, size/2);
+            image(recolored[strength], -size/2, 0, size, size/2, 80, 0, 96, 8);
           }
         }
         if (redstoneup[side]) {
@@ -1128,9 +1171,7 @@ class Block {
             rotateZ(PI);
           if (side == 0 || side == 1)
             rotateY(PI/2);
-          subImg = atlas.get(80, 0, 16, 16);
-          recolored = recolor(subImg, strengthColor);
-          image(recolored, -blockSize/2, -blockSize/2, blockSize, blockSize);
+          image(recolored[strength], -blockSize/2, -blockSize/2, blockSize, blockSize, 80, 0, 96, 16);
         }
       }
       popMatrix();
@@ -1388,6 +1429,12 @@ class Block {
     if(blockType == 5){
       int originalStrength = strength;
       strength = 0;
+      for(int i = 4; i < 6; i++){
+        Block b = getBlock(PVector.add(pos, sides[i]));
+        if(b != null && b.blockType <= 4 && b.power == 3){
+          strength = max(strength, b.strength);
+        }
+      }
       for(int i = 0; i < 4; i++){
         sidecovered[i] = false;
         redstoneup[i] = false;
@@ -1533,7 +1580,7 @@ class Block {
         }
       }
       if(strength == 0 && blockType == 4 && prevStrength > 0){
-        delay = 3;
+        delay = 3*2;
       }
       if(strength != prevStrength || power != prevPower) neighborUpdate = true;
     }
@@ -1547,13 +1594,13 @@ class Block {
       else{
         if(attachedBlock.power > 1){
           if(strength != 0 && nextStrength != 0){
-            delay = 1;
+            delay = 1*2;
             nextStrength = 0;
           }
         }
         else{
           if(strength != 15 && nextStrength != 15){
-            delay = 1;
+            delay = 1*2;
             nextStrength = 15;
           }
         }
@@ -1581,25 +1628,25 @@ class Block {
       if(backBlock == null || backBlock.strength == 0){
         if(strength != 0 && nextStrength != 0){
           nextStrength = 0;
-          delay = state+1;
+          delay = (state+1)*2;
         }
       }
       else if(backBlock.blockType <= 4 && backBlock.strength > 0 && backBlock.power > 1){
         if(strength != 15 && nextStrength != 15){
           nextStrength = 15;
-          delay = state+1;
+          delay = (state+1)*2;
         }
       }
       else if((backBlock.blockType == 5||backBlock.blockType >= 8) && backBlock.strength > 0){
         if(strength != 15 && nextStrength != 15){
           nextStrength = 15;
-          delay = state+1;
+          delay = (state+1)*2;
         }
       }
       else if((backBlock.blockType == 6||backBlock.blockType == 7) && backBlock.strength > 0 && backBlock.dir == dir){
         if(strength != 15 && nextStrength != 15){
           nextStrength = 15;
-          delay = state+1;
+          delay = (state+1)*2;
         }
       }
       }
@@ -1654,7 +1701,7 @@ class Block {
       }
       if(new_strength != strength && new_strength != nextStrength){
         nextStrength = new_strength;
-        delay = 1;
+        delay = 1*2;
       }
       }
     }
@@ -1743,7 +1790,7 @@ class Chunk {
   HashMap<Long, Block> blockMap = new HashMap();
   ArrayList<Block> toDraw = new ArrayList();
   PShape chunkShape;
-  public Chunk(PVector pos, int seed) {
+  public Chunk(PVector pos, ArrayList<int[]> modifications) {
     this.pos = pos;
     for (int x = (int)pos.x; x < pos.x + chunkWidth; x += blockSize) {
       for (int z = (int)pos.z; z < pos.z + chunkWidth; z += blockSize) {
@@ -1753,30 +1800,21 @@ class Chunk {
         addBlock(new PVector(x, blockSize*3, z), 1, -1, -1, false);
       }
     }
-    for(int i = 0; i < operations.length; i++){
-      if(operations[i].charAt(0) == 'r'){
-        String[] parts = splitTokens(operations[i].substring(2), " ");
-
-        float[] rm = new float[parts.length];
-        
-        for (int j = 0; j < parts.length; j++) {
-          rm[j] = Float.parseFloat(parts[j]);
-        }
-        if(blockMap.containsKey(vectorHash(new PVector(rm[0], rm[1], rm[2])))){
-          removeBlock(new PVector(rm[0], rm[1], rm[2]), false);
-        }
+    for(int[] i:modifications){
+      if(i[0] == -1){
+        removeBlock(new PVector(i[1], i[2], i[3]), false);
+        //println("rm " + new PVector(i[1], i[2], i[3]));
       }
       else{
-        String[] parts = splitTokens(operations[i], " ");
-
-        float[] x = new float[parts.length];
-        
-        for (int j = 0; j < parts.length; j++) {
-          x[j] = Float.parseFloat(parts[j]);
-        }
-        if(x[3] >= pos.x && x[3] < pos.x+chunkWidth && x[5] >= pos.z && x[5] < pos.z+chunkWidth){
-          addBlock(new PVector(x[3], x[4], x[5]), (int)x[0], (int)x[1], (int)x[2], false);
-        }
+        Block b = new Block(new PVector(i[1], i[2], i[3]), i[0], this, i[7], i[6]);
+        b.power = i[4];
+        b.strength = i[5];
+        b.state = i[8];
+        b.flag = (i[9]==1);
+        b.nextStrength = i[10];
+        b.delay = i[11];
+        addBlock(b);
+        //println("add " + new PVector(i[1], i[2], i[3]));
       }
     }
     update();
@@ -1787,28 +1825,41 @@ class Chunk {
       blocks.get(i).updateCover();
     }
   }
-  void removeBlock(PVector v, boolean log) {
-    if(log)
-    output.println("r " + v.x + " " + v.y + " " + v.z); 
+  void removeBlock(PVector v, boolean update) {
+    //if(log)
+    //output.println("r " + v.x + " " + v.y + " " + v.z); 
     Block toRemove = blockMap.get(vectorHash(v));
     blocks.remove(toRemove);
     blockMap.remove(vectorHash(v));
+    if(update)
     toRemove.updateNeighbors();
   }
   void removeBlock(PVector v) {
     removeBlock(v, true);
   }
+  void addBlock(Block b){
+    if (blockMap.containsKey(vectorHash(b.pos)))
+      return;
+    blocks.add(b);
+    blockMap.put(vectorHash(b.pos), b);
+  }
   void addBlock(PVector v, int blockType, int attached, int dir){
+    println(v + " " + pos);
     addBlock(v, blockType, attached, dir, true);
   }
-  void addBlock(PVector v, int blockType, int attached, int dir, boolean log) {
-    Block b = new Block(v, blockType, this, attached, dir);
+  void addBlock(PVector v, int blockType, int attached, int dir, boolean update) {
     if (blockMap.containsKey(vectorHash(v)))
       return;
-    if(log)
-      output.println(blockType + " " + attached + " " + dir + " " + v.x + " " + v.y + " " + v.z); 
+    Block b = new Block(v, blockType, this, attached, dir);
+   
+
+    
+      
+    //if(log)
+    //  output.println(blockType + " " + attached + " " + dir + " " + v.x + " " + v.y + " " + v.z); 
     blocks.add(b);
     blockMap.put(vectorHash(v), b);
+    if(update)
     b.updateNeighbors();
     //generated = 0;
   }
