@@ -291,7 +291,18 @@ void setup() {
   lights();
 
   playerPos.y = 4*cubeSize+camera_height;
-
+  for(Chunk c:chunks){
+    for(Block b:c.blocks){
+      if(b.blockType == 5)
+      b.update(false);
+    }
+  }
+  for(Chunk c:chunks){
+    for(Block b:c.blocks){
+      if(b.blockType != 5)
+      b.update(false);
+    }
+  }
   
   //Chunk chunk = new Chunk(new PVector(0, 0, 0), new ArrayList<int[]>());
   //chunks.add(chunk);
@@ -1106,7 +1117,6 @@ class Block {
   }    
   
   void drawSide(int side) {
-    fill(200);
     if (blockType == 5) {
       pushMatrix();
       translate(0, -blockSize/2+0.01, 0);
@@ -1446,41 +1456,34 @@ class Block {
         if (midBlock != null && midBlock.blockType == 5) {
           sidecovered[i] = true;
           strength = max(strength, midBlock.strength-1);
-          continue;
         }
         if (midBlock != null && midBlock.blockType == 6 && (midBlock.dir == (i^1) || midBlock.dir == i)) {
           sidecovered[i] = true;
           if(midBlock.dir == (i^1))
             strength = max(strength, midBlock.strength);
-          continue;
         }
         if (midBlock != null && midBlock.blockType == 7) {
           sidecovered[i] = true;
           if(midBlock.dir == (i^1))
             strength = max(strength, midBlock.strength);
-          continue;
         }
         if (midBlock != null && midBlock.blockType > 7) {
           sidecovered[i] = true;
           strength = max(strength, midBlock.strength);
-          continue;
         }
         if (midBlock != null && (midBlock.blockType < 3 || midBlock.blockType == 4) && midBlock.power == 3) {
           strength = max(strength, midBlock.strength);
-          continue;
         }
         Block upBlock = getBlock(up);
         if (upBlock != null && upBlock.blockType == 5 && (getBlock(dirup) == null || transparent[getBlock(dirup).blockType])) {
           redstoneup[i] = true;
           sidecovered[i] = true;
           strength = max(strength, upBlock.strength-1);
-          continue;
         }
         Block downBlock = getBlock(down);
         if (downBlock != null && downBlock.blockType == 5 && (midBlock == null || transparent[midBlock.blockType])) {
           sidecovered[i] = true;
           strength = max(strength, downBlock.strength-1);
-          continue;
         }
       }
       if(originalStrength != strength) neighborUpdate = true;
@@ -1579,7 +1582,7 @@ class Block {
           }
         }
       }
-      if(strength == 0 && blockType == 4 && prevStrength > 0){
+      if(strength == 0 && blockType == 4 && prevPower > 0){
         delay = 3*2;
       }
       if(strength != prevStrength || power != prevPower) neighborUpdate = true;
@@ -1718,6 +1721,20 @@ class Block {
         Block neighbor = getBlock(PVector.add(sides[i], pos));
         if (neighbor != null) {
           neighbor.update(false);
+        }
+      }
+      if(blockType == 5){
+        for (int i = 0; i < 4; i++) {
+          Block neighbor = getBlock(PVector.add(PVector.add(sides[i], pos), sides[4]));
+          if (neighbor != null) {
+            neighbor.update(false);
+          }
+        }
+        for (int i = 0; i < 4; i++) {
+          Block neighbor = getBlock(PVector.add(PVector.add(sides[i], pos), sides[5]));
+          if (neighbor != null) {
+            neighbor.update(false);
+          }
         }
       }
     }
